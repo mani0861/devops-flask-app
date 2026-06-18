@@ -3,9 +3,10 @@ pipeline {
 
     stages {
 
-        stage('Git Checkout') {
+        stage('Checkout SCM') {
             steps {
-                git 'https://github.com/YOUR-REPO.git'
+                // Jenkins automatically checks out repo when pipeline is from GitHub
+                echo "Code already checked out"
             }
         }
 
@@ -14,6 +15,7 @@ pipeline {
                 sh '''
                 python3 -m venv venv
                 . venv/bin/activate
+                pip install --upgrade pip
                 pip install -r requirements.txt
                 echo "Testing done"
                 '''
