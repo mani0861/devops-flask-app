@@ -2,10 +2,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "flask-app"
-        IMAGE_TAG = "latest"
-        FULL_IMAGE = "flask-app:latest"
-        KUBECONFIG_PATH = "/var/lib/jenkins/.kube/config"
+        IMAGE_NAME = "flask-app:latest"
+        KUBECONFIG = "${WORKSPACE}/kubeconfig"
     }
 
     stages {
@@ -13,16 +11,6 @@ pipeline {
         stage('Checkout SCM') {
             steps {
                 checkout scm
-            }
-        }
-
-        stage('Verify Workspace') {
-            steps {
-                sh '''
-                echo "Workspace Details:"
-                pwd
-                ls -la
-                '''
             }
         }
 
@@ -38,25 +26,8 @@ pipeline {
                 ./venv/bin/pip install --upgrade pip
                 ./venv/bin/pip install -r requirements.txt
 
-                echo "Running basic import test..."
+                echo "Running test..."
                 ./venv/bin/python -c "import flask; print('Flask OK')"
-                '''
-            }
-        }
-
-        stage('Validate Dockerfile') {
-            steps {
-                sh '''
-                set -e
-
-                echo "Checking Dockerfile for merge conflicts..."
-
-                if grep -q "<<<<<<<" Dockerfile; then
-                    echo "ERROR: Merge conflict found in Dockerfile"
-                    exit 1
-                fi
-
-                echo "Dockerfile is clean"
                 '''
             }
         }
@@ -66,15 +37,14 @@ pipeline {
                 sh '''
                 set -e
 
-                echo "Fixing Docker environment..."
+                echo "Fixing docker environment..."
                 unset DOCKER_TLS_VERIFY || true
                 unset DOCKER_HOST || true
                 unset DOCKER_CERT_PATH || true
 
                 echo "Building Docker image..."
-                docker build -t flask-app:latest .
+                docker build -t $IMAGE_NAME .
 
-                echo "Docker images:"
                 docker images | grep flask-app || true
                 '''
             }
@@ -85,20 +55,16 @@ pipeline {
                 sh '''
                 set -e
 
-                echo "Using kubeconfig:"
-                export KUBECONFIG=${KUBECONFIG_PATH}
+                echo "Using kubeconfig from workspace..."
 
-                echo "Checking cluster..."
+                export KUBECONFIG=$KUBECONFIG
+
                 kubectl version --client
                 kubectl get nodes
 
-                echo "Deploying application..."
-                kubectl apply -f deployment.yaml -n default
-                kubectl apply -f service.yaml -n default
-
-                echo "Deployment status:"
-                kubectl get pods -n default
-                kubectl get svc -n default
+                echo "Deploying to Kubernetes..."
+                kubectl apply -f deployment.yaml
+                kubectl apply -f service.yaml
                 '''
             }
         }
@@ -108,11 +74,9 @@ pipeline {
         success {
             echo "Pipeline SUCCESS ✅"
         }
-
         failure {
-            echo "Pipeline FAILED ❌ - check logs"
+            echo "Pipeline FAILED ❌ (check logs)"
         }
-
         always {
             cleanWs()
         }
