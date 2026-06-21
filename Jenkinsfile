@@ -65,16 +65,15 @@ pipeline {
                 sh '''
                 set -e
 
-                echo "⚠️ NOT using minikube docker-env (fixing TLS issue)"
-
-                unset DOCKER_TLS_VERIFY
-                unset DOCKER_HOST
-                unset DOCKER_CERT_PATH
+                echo "Fixing Docker env (avoid minikube TLS issue)"
+                unset DOCKER_TLS_VERIFY || true
+                unset DOCKER_HOST || true
+                unset DOCKER_CERT_PATH || true
 
                 echo "Building Docker image..."
                 docker build -t flask-app:latest .
 
-                echo "Images:"
+                echo "Docker images:"
                 docker images | grep flask-app || true
                 '''
             }
@@ -82,22 +81,23 @@ pipeline {
 
         stage('Deploy to K8s') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                    sh '''
-                    set -e
+                sh '''
+                set -e
 
-                    echo "Checking cluster..."
-                    kubectl get nodes
+                echo "Deploying to Kubernetes using local kubeconfig..."
 
-                    echo "Deploying..."
-                    kubectl apply -f deployment.yaml
-                    kubectl apply -f service.yaml
+                export KUBECONFIG=/home/manish/.kube/config
 
-                    echo "Status:"
-                    kubectl get pods
-                    kubectl get svc
-                    '''
-                }
+                kubectl version --client
+                kubectl get nodes
+
+                kubectl apply -f deployment.yaml -n default
+                kubectl apply -f service.yaml -n default
+
+                echo "Deployment status:"
+                kubectl get pods -n default
+                kubectl get svc -n default
+                '''
             }
         }
     }
@@ -108,7 +108,7 @@ pipeline {
         }
 
         failure {
-            echo "Pipeline FAILED ❌"
+            echo "Pipeline FAILED ❌ - check logs"
         }
 
         always {
