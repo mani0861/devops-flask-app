@@ -5,6 +5,7 @@ pipeline {
         IMAGE_NAME = "flask-app"
         IMAGE_TAG = "latest"
         FULL_IMAGE = "flask-app:latest"
+        KUBECONFIG_PATH = "/var/lib/jenkins/.kube/config"
     }
 
     stages {
@@ -65,7 +66,7 @@ pipeline {
                 sh '''
                 set -e
 
-                echo "Fixing Docker env (avoid minikube TLS issue)"
+                echo "Fixing Docker environment..."
                 unset DOCKER_TLS_VERIFY || true
                 unset DOCKER_HOST || true
                 unset DOCKER_CERT_PATH || true
@@ -84,13 +85,14 @@ pipeline {
                 sh '''
                 set -e
 
-                echo "Deploying to Kubernetes using local kubeconfig..."
+                echo "Using kubeconfig:"
+                export KUBECONFIG=${KUBECONFIG_PATH}
 
-                export KUBECONFIG=/home/manish/.kube/config
-
+                echo "Checking cluster..."
                 kubectl version --client
                 kubectl get nodes
 
+                echo "Deploying application..."
                 kubectl apply -f deployment.yaml -n default
                 kubectl apply -f service.yaml -n default
 
