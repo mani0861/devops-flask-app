@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "flask-app:latest"
+        KUBECONFIG = "${WORKSPACE}/kubeconfig"
     }
 
     stages {
@@ -35,7 +36,7 @@ pipeline {
                 sh '''
                 set -e
                 echo "Building Docker image..."
-                docker build -t $IMAGE_NAME .
+                docker build -t flask-app:latest .
                 docker images | grep flask-app
                 '''
             }
@@ -43,18 +44,23 @@ pipeline {
 
         stage('Deploy to K8s') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG')]) {
-                    sh '''
-                    set -e
-                    echo "Deploying to Kubernetes..."
+                sh '''
+                set -e
 
-                    kubectl version --client
-                    kubectl get nodes
+                echo "Deploying to Kubernetes..."
 
-                    # optional deploy
+                export KUBECONFIG=$WORKSPACE/kubeconfig
+
+                kubectl version --client
+                kubectl get nodes
+
+                # optional deployment
+                if [ -d "k8s" ]; then
                     kubectl apply -f k8s/
-                    '''
-                }
+                else
+                    echo "No k8s folder found, skipping deploy"
+                fi
+                '''
             }
         }
     }
@@ -63,11 +69,9 @@ pipeline {
         success {
             echo "Pipeline SUCCESS ✅"
         }
-
         failure {
             echo "Pipeline FAILED ❌"
         }
-
         always {
             cleanWs()
         }
