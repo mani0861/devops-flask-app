@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         IMAGE_NAME = "flask-app:latest"
-        KUBECONFIG = "${WORKSPACE}/kubeconfig"
     }
 
     stages {
@@ -18,8 +17,7 @@ pipeline {
             steps {
                 sh '''
                 set -e
-
-                echo "Creating virtual environment..."
+                echo "Creating venv..."
                 python3 -m venv venv
 
                 echo "Installing dependencies..."
@@ -36,36 +34,27 @@ pipeline {
             steps {
                 sh '''
                 set -e
-
-                echo "Fixing docker environment..."
-                unset DOCKER_TLS_VERIFY || true
-                unset DOCKER_HOST || true
-                unset DOCKER_CERT_PATH || true
-
                 echo "Building Docker image..."
                 docker build -t $IMAGE_NAME .
-
-                docker images | grep flask-app || true
+                docker images | grep flask-app
                 '''
             }
         }
 
         stage('Deploy to K8s') {
             steps {
-                sh '''
-                set -e
+                withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG')]) {
+                    sh '''
+                    set -e
+                    echo "Deploying to Kubernetes..."
 
-                echo "Using kubeconfig from workspace..."
+                    kubectl version --client
+                    kubectl get nodes
 
-                export KUBECONFIG=$KUBECONFIG
-
-                kubectl version --client
-                kubectl get nodes
-
-                echo "Deploying to Kubernetes..."
-                kubectl apply -f deployment.yaml
-                kubectl apply -f service.yaml
-                '''
+                    # optional deploy
+                    kubectl apply -f k8s/
+                    '''
+                }
             }
         }
     }
@@ -74,9 +63,11 @@ pipeline {
         success {
             echo "Pipeline SUCCESS ✅"
         }
+
         failure {
-            echo "Pipeline FAILED ❌ (check logs)"
+            echo "Pipeline FAILED ❌"
         }
+
         always {
             cleanWs()
         }
